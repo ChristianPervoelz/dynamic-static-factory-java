@@ -17,7 +17,7 @@ public class Service1 {
    * Creates a new object of type Service1, taking the given input string.
    * @throws IllegalArgumentException if first character is an 'a'
    */
-  public static Service1 get(final String input) {
+  public static Service1 get(final String input, int x) {
     if(input.startsWith("a")) {
       throw new IllegalArgumentException();
     }
@@ -34,7 +34,7 @@ public class Service2 {
    * Creates a new object of type Service1, taking the given input string.
    * @throws IllegalArgumentException if the first character is a 'b'
    */
-  public static Service2 get(final String input) {
+  public static Service2 get(final String input, int x) {
     if(input.startsWith("b")) {
       throw new IllegalArgumentException();
     }
@@ -74,7 +74,7 @@ public class Service1 {
    * Creates a new object of type Service1, taking the given input string.
    */
   @StaticFactoryMethod(predicate = Decider.class)
-  public static Service1 get(final String input) {
+  public static Service1 get(final String input, int x) {
     // create our service
   }
 
@@ -94,7 +94,7 @@ public class Service2 {
    * Creates a new object of type Service1, taking the given input string.
    */
   @StaticFactoryMethod(predicate = Decider.class)
-  public static Service2 get(final String input) {
+  public static Service2 get(final String input, int x) {
    // create our service
   }
   
@@ -109,5 +109,36 @@ public class Service2 {
 As you can see, the classes have an inner class now (could also be an external one, it really does not matter) which is referenced from an annotation on our static factory method.
 
 Consuming code can now just call a single line:
-`Object servicetoUse = StaticFactoryUtitl.getObject(null, aString, aString)`
+
+`Object servicetoUse = StaticFactoryUtitl.getObject(null, aString, aString, x)`
+
 And that's it already.
+
+The second parameter of the above call is the input to the predicate and the third and fourth parameters are the input to the static factory method, so these two parameters are not required to be the same at all.
+
+## How does it work?
+During building the compiler will call registered annotation processors (you might have to enable annoation processing in your build process), which each reacts on at least one specific annotation (different processors can react on the same annotation). This framework comes with such an annotation processor.
+
+It reacts on the annotation `@StaticFactoryMethod` (and for Java8 also on the according container) and writes a file to the directory `META-INF\services\`. This is a pure text file and is named `de.cp.staticfactories.method.StaticFactoryMethod`. Content of this file are the full qualified names (FQN) of the classes containing methods with the annotation.
+
+Now when `StaticFactoryUtitl.getObject(null, aString, aString)` is called, that file is read and for each method with the annotation the predicate is called using the second parameter and if it returns true, the method is called with the third parameter (which might be an array of elements).
+
+## Compile time safety
+Annotation processors are able to check that an annotation fulfills certain requirements. For example it might be an annotation must be placed only on a class of type `interface`. If it is nonetheless place on *normal* class the processor can create a compiler error or warning.
+
+So does this framework. It creates several compiler issues:
+#### Warnings
+If the annotation value `returns` is used and the type defined there is neither a sub type, not the same type of annotated methods return value.
+#### Errors
+The compiler will create errors for following cases:
+##### Problems with the predicate
+- predicate is an inner class and **not** static
+- predicate is `abstract`
+- predicate is of type `interface`
+- predicate has a non-default constructor (either not public or has paramaters)
+##### Problems with the method
+- the method is not public
+- the method is not static
+- the method returns `void`
+- the method is inside an abstract class
+- the method is inside a non-public class
